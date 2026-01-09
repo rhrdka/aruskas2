@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Cashflow — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#f8fafc; }
+    .modal-backdrop { background: rgba(2,6,23,0.45); }
+    .truncate-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <div class="flex h-screen">
+    <aside class="hidden md:flex md:flex-col w-64 bg-white border-r">
+      <div class="p-6 flex items-center gap-3 border-b">
+        <div class="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-teal-400 rounded-lg flex items-center justify-center text-white font-bold">CF</div>
+        <div>
+          <div class="text-lg font-semibold">Cashflow</div>
+          <div class="text-sm text-slate-500">Manajemen Keuangan</div>
+        </div>
+      </div>
+      <nav class="p-4 flex-1 space-y-1">
+        <a href="index.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-700 bg-slate-50">Dashboard</a>
+        <a href="history.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-50">Riwayat</a>
+        <a href="charts.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-50">Grafik</a>
+        <a href="analysis.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-50">Analisis</a>
+      </nav>
+      <div class="p-4 border-t">
+        <button id="importBtn" class="w-full px-4 py-2 text-sm rounded-md bg-amber-50 text-amber-700 border border-amber-200">Impor CSV</button>
+        <input id="importFile" type="file" accept=".csv" class="hidden" />
+        <button id="exportBtn" class="w-full mt-2 px-4 py-2 text-sm rounded-md bg-indigo-600 text-white">Ekspor CSV</button>
+      </div>
+    </aside>
+
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <header class="flex items-center justify-between p-4 bg-white border-b">
+        <div class="flex items-center gap-4">
+          <h1 class="text-xl font-semibold">Dashboard</h1>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="hidden sm:flex items-center gap-2 px-3 py-1 rounded-md bg-slate-50 text-slate-700">
+            <input id="search" placeholder="Cari transaksi..." class="bg-transparent text-sm focus:outline-none" />
+          </div>
+          <button id="addBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md">Tambah Transaksi</button>
+          <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-700">RD</div>
+        </div>
+      </header>
+
+      <main class="p-6 overflow-auto">
+        <section class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div class="bg-white p-4 rounded-lg shadow-sm">
+            <div class="text-sm text-slate-500">Saldo</div>
+            <div id="kpi-balance" class="text-2xl font-semibold mt-1">Rp 0</div>
+            <div class="text-xs text-slate-400 mt-2">Total saldo saat ini</div>
+          </div>
+          <div class="bg-white p-4 rounded-lg shadow-sm">
+            <div class="text-sm text-slate-500">Pemasukan (30 hari)</div>
+            <div id="kpi-income" class="text-2xl font-semibold text-emerald-600 mt-1">Rp 0</div>
+            <div class="text-xs text-slate-400 mt-2">Pemasukan 30 hari terakhir</div>
+          </div>
+          <div class="bg-white p-4 rounded-lg shadow-sm">
+            <div class="text-sm text-slate-500">Pengeluaran (30 hari)</div>
+            <div id="kpi-expense" class="text-2xl font-semibold text-rose-600 mt-1">Rp 0</div>
+            <div class="text-xs text-slate-400 mt-2">Pengeluaran 30 hari terakhir</div>
+          </div>
+          <div class="bg-white p-4 rounded-lg shadow-sm">
+            <div class="text-sm text-slate-500">Neto (30 hari)</div>
+            <div id="kpi-net" class="text-2xl font-semibold mt-1">Rp 0</div>
+            <div class="text-xs text-slate-400 mt-2">Selisih pemasukan dan pengeluaran</div>
+          </div>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white rounded-lg p-4 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-lg font-semibold">Arus Kas (6 bulan)</h2>
+              <a href="charts.html" class="text-sm text-indigo-600 hover:underline">Lihat detail</a>
+            </div>
+            <div class="h-56">
+              <canvas id="miniChart"></canvas>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-lg p-4 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-lg font-semibold">Transaksi Terbaru</h2>
+              <a href="history.html" class="text-sm text-indigo-600 hover:underline">Lihat semua</a>
+            </div>
+            <div id="recentList" class="space-y-2 max-h-72 overflow-auto">
+            </div>
+          </div>
+        </section>
+
+        <section class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="bg-white rounded-lg p-4 shadow-sm">
+            <h3 class="font-semibold">Analisis Singkat</h3>
+            <p id="quickAnalysis" class="text-sm text-slate-600 mt-2">Analisis akan muncul di sini.</p>
+            <a href="analysis.html" class="text-indigo-600 text-sm mt-3 inline-block">Lihat lebih lanjut →</a>
+          </div>
+          <div class="bg-white rounded-lg p-4 shadow-sm lg:col-span-2">
+            <h3 class="font-semibold">Anggaran vs Realisasi</h3>
+            <p class="text-sm text-slate-600 mt-2">Tambahkan anggaran di halaman Analisis untuk perbandingan.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal tambah/edit -->
+  <div id="modal" class="fixed inset-0 hidden items-center justify-center modal-backdrop p-4">
+    <div class="bg-white rounded-lg w-full max-w-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modalTitle" class="text-lg font-semibold">Tambah Transaksi</h3>
+        <button id="closeModal" class="text-slate-500 hover:text-slate-700">&times;</button>
+      </div>
+      <form id="txForm" class="grid grid-cols-1 gap-3">
+        <input type="hidden" id="txId" />
+        <div>
+          <label class="text-sm text-slate-600">Tanggal</label>
+          <input id="txDate" type="date" class="w-full mt-1 p-2 border rounded-md" required />
+        </div>
+        <div>
+          <label class="text-sm text-slate-600">Deskripsi</label>
+          <input id="txDesc" type="text" placeholder="mis. Belanja, Gaji" class="w-full mt-1 p-2 border rounded-md" required />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm text-slate-600">Jumlah</label>
+            <input id="txAmount" type="number" step="0.01" class="w-full mt-1 p-2 border rounded-md" required />
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Tipe</label>
+            <select id="txType" class="w-full mt-1 p-2 border rounded-md">
+              <option value="income">Pemasukan</option>
+              <option value="expense">Pengeluaran</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="text-sm text-slate-600">Kategori</label>
+          <input id="txCategory" type="text" placeholder="mis. Makanan, Gaji, Sewa" class="w-full mt-1 p-2 border rounded-md" />
+        </div>
+        <div class="flex justify-end gap-2 mt-2">
+          <button type="button" id="cancelBtn" class="px-4 py-2 rounded-md border">Batal</button>
+          <button type="submit" class="px-4 py-2 rounded-md bg-indigo-600 text-white">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <template id="txTemplate">
+    <div class="flex items-center justify-between p-3 border rounded-md bg-white">
+      <div>
+        <div class="text-sm font-medium tx-desc">Deskripsi</div>
+        <div class="text-xs text-slate-400 tx-meta">Kategori • Tanggal</div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-sm tx-amount">Rp 0</div>
+        <div class="flex gap-2">
+          <button class="tx-edit text-indigo-600 text-sm">Edit</button>
+          <button class="tx-delete text-rose-500 text-sm">Hapus</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+  (function(){
+    const STORAGE_KEY = 'cf_transactions_v1';
+    // elemen
+    const kpiBalance = document.getElementById('kpi-balance');
+    const kpiIncome = document.getElementById('kpi-income');
+    const kpiExpense = document.getElementById('kpi-expense');
+    const kpiNet = document.getElementById('kpi-net');
+    const recentList = document.getElementById('recentList');
+    const miniChartCanvas = document.getElementById('miniChart');
+    const addBtn = document.getElementById('addBtn');
+    const modal = document.getElementById('modal');
+    const closeModal = document.getElementById('closeModal');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const txForm = document.getElementById('txForm');
+    const importBtn = document.getElementById('importBtn');
+    const importFile = document.getElementById('importFile');
+    const exportBtn = document.getElementById('exportBtn');
+    const searchInput = document.getElementById('search');
+    const modalTitle = document.getElementById('modalTitle');
+    const txIdInput = document.getElementById('txId');
+
+    let transactions = loadTransactions();
+    if (!transactions || transactions.length === 0) {
+      // contoh data awal jika kosong
+      transactions = [
+        { id: id(), date: today(-1), desc: 'Gaji', amount: 15000000, type: 'income', category: 'Gaji' },
+        { id: id(), date: today(-5), desc: 'Belanja', amount: 250000, type: 'expense', category: 'Makanan' },
+        { id: id(), date: today(-10), desc: 'Sewa', amount: 3000000, type: 'expense', category: 'Perumahan' }
+      ];
+      saveTransactions();
+    }
+
+    // chart instance lokal
+    let miniChart = null;
+
+    // inisialisasi
+    renderAll();
+
+    // event
+    addBtn.addEventListener('click', () => openModal());
+    closeModal.addEventListener('click', closeModalFn);
+    cancelBtn.addEventListener('click', closeModalFn);
+    txForm.addEventListener('submit', onSubmit);
+    importBtn.addEventListener('click', ()=> importFile.click());
+    importFile.addEventListener('change', onImportFile);
+    exportBtn.addEventListener('click', exportCSV);
+    searchInput.addEventListener('input', renderRecentTransactions);
+
+    function id(){ return 'tx_' + Math.random().toString(36).slice(2,9); }
+    function today(offsetDays = 0){
+      const d = new Date();
+      d.setDate(d.getDate() + offsetDays);
+      return d.toISOString().slice(0,10);
+    }
+
+    function loadTransactions(){
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch(e){
+        console.error('Gagal membaca storage', e);
+        return [];
+      }
+    }
+    function saveTransactions(){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
+    }
+
+    function renderAll(){
+      renderKPIs();
+      renderRecentTransactions();
+      renderMiniChart();
+      renderQuickAnalysis();
+    }
+
+    function formatCurrency(n){
+      const val = Number(n) || 0;
+      return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
+    }
+
+    function renderKPIs(){
+      const balance = transactions.reduce((s,t)=> t.type === 'income' ? s + Number(t.amount) : s - Number(t.amount), 0);
+      const now = new Date();
+      const cutoff = new Date(); cutoff.setDate(now.getDate() - 30);
+      const income30 = transactions.filter(t => t.type === 'income' && new Date(t.date) >= cutoff).reduce((s,t)=> s + Number(t.amount), 0);
+      const expense30 = transactions.filter(t => t.type === 'expense' && new Date(t.date) >= cutoff).reduce((s,t)=> s + Number(t.amount), 0);
+      const net30 = income30 - expense30;
+
+      kpiBalance.textContent = formatCurrency(balance);
+      kpiIncome.textContent = formatCurrency(income30);
+      kpiExpense.textContent = formatCurrency(expense30);
+      kpiNet.textContent = formatCurrency(net30);
+    }
+
+    function renderRecentTransactions(){
+      const q = (searchInput.value || '').toLowerCase();
+      recentList.innerHTML = '';
+      const sorted = transactions.slice().sort((a,b) => new Date(b.date) - new Date(a.date));
+      const items = sorted.filter(t => {
+        if (!q) return true;
+        return (t.desc + ' ' + (t.category||'') + ' ' + t.date).toLowerCase().includes(q);
+      }).slice(0,6);
+      if (items.length === 0) {
+        recentList.innerHTML = '<div class="text-sm text-slate-500">Belum ada transaksi. Tambahkan sekarang.</div>';
+        return;
+      }
+      for (const tx of items){
+        const tpl = document.getElementById('txTemplate').content.cloneNode(true);
+        tpl.querySelector('.tx-desc').textContent = tx.desc;
+        tpl.querySelector('.tx-meta').textContent = `${tx.category || '—'} • ${tx.date}`;
+        const amountEl = tpl.querySelector('.tx-amount');
+        amountEl.textContent = (tx.type === 'income' ? '+ ' : '- ') + formatCurrency(tx.amount);
+        if (tx.type === 'income') amountEl.classList.add('text-emerald-600'); else amountEl.classList.add('text-rose-600');
+
+        tpl.querySelector('.tx-delete').addEventListener('click', ()=> {
+          if (confirm('Hapus transaksi ini?')) {
+            transactions = transactions.filter(t => t.id !== tx.id);
+            saveTransactions();
+            renderAll();
+          }
+        });
+        tpl.querySelector('.tx-edit').addEventListener('click', ()=> openModal(tx));
+        recentList.appendChild(tpl);
+      }
+    }
+
+    function aggregateLastMonths(months = 6){
+      const result = [];
+      const now = new Date();
+      for (let i = months - 1; i >= 0; i--){
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+        result.push({ key, label: d.toLocaleString('id-ID', { month: 'short', year: 'numeric' }), income: 0, expense: 0 });
+      }
+      for (const t of transactions){
+        const d = new Date(t.date);
+        const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+        const bucket = result.find(r => r.key === key);
+        if (bucket){
+          if (t.type === 'income') bucket.income += Number(t.amount);
+          else bucket.expense += Number(t.amount);
+        }
+      }
+      return result;
+    }
+
+    function renderMiniChart(){
+      // pastikan destroy chart lama
+      if (miniChart) {
+        try { miniChart.destroy(); } catch(e){ /* ignore */ }
+        miniChart = null;
+      }
+      const ctx = miniChartCanvas.getContext('2d');
+      const data = aggregateLastMonths(6);
+      const labels = data.map(d => d.label);
+      const income = data.map(d => d.income);
+      const expense = data.map(d => d.expense);
+
+      miniChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Pemasukan', data: income, backgroundColor: 'rgba(34,197,94,0.85)' },
+            { label: 'Pengeluaran', data: expense, backgroundColor: 'rgba(244,63,94,0.85)' }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom' } },
+          scales: {
+            y: { ticks: { callback: v => new Intl.NumberFormat('id-ID', { maximumFractionDigits:0 }).format(v) } }
+          }
+        }
+      });
+    }
+
+    function renderQuickAnalysis(){
+      const totalIncome = transactions.filter(t => t.type === 'income').reduce((s,t)=> s + Number(t.amount), 0);
+      const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s,t)=> s + Number(t.amount), 0);
+      const topExpense = transactions.filter(t => t.type === 'expense').sort((a,b)=> b.amount - a.amount)[0];
+      const tips = [];
+      if (totalExpense > totalIncome) tips.push('Peringatan: Pengeluaran melebihi pemasukan. Tinjau pengeluaran rutin Anda.');
+      else tips.push('Posisi sehat: pemasukan ≥ pengeluaran.');
+      if (topExpense) tips.push(`Pengeluaran terbesar: ${topExpense.desc} (${formatCurrency(topExpense.amount)})`);
+      document.getElementById('quickAnalysis').textContent = tips.join(' ');
+    }
+
+    function openModal(tx){
+      modal.classList.remove('hidden'); modal.classList.add('flex');
+      if (!tx) {
+        modalTitle.textContent = 'Tambah Transaksi';
+        txIdInput.value = '';
+        document.getElementById('txDate').value = today();
+        document.getElementById('txDesc').value = '';
+        document.getElementById('txAmount').value = '';
+        document.getElementById('txType').value = 'income';
+        document.getElementById('txCategory').value = '';
+      } else {
+        modalTitle.textContent = 'Edit Transaksi';
+        txIdInput.value = tx.id;
+        document.getElementById('txDate').value = tx.date;
+        document.getElementById('txDesc').value = tx.desc;
+        document.getElementById('txAmount').value = tx.amount;
+        document.getElementById('txType').value = tx.type;
+        document.getElementById('txCategory').value = tx.category || '';
+      }
+    }
+    function closeModalFn(){
+      modal.classList.add('hidden'); modal.classList.remove('flex');
+    }
+
+    function onSubmit(e){
+      e.preventDefault();
+      const idVal = txIdInput.value;
+      const date = document.getElementById('txDate').value;
+      const desc = document.getElementById('txDesc').value.trim();
+      const amount = parseFloat(document.getElementById('txAmount').value) || 0;
+      const type = document.getElementById('txType').value;
+      const category = document.getElementById('txCategory').value.trim();
+
+      if (!desc || !date) { alert('Tanggal dan deskripsi wajib diisi'); return; }
+
+      if (idVal) {
+        // edit
+        transactions = transactions.map(t => t.id === idVal ? ({ ...t, date, desc, amount, type, category }) : t);
+      } else {
+        const newTx = { id: id(), date, desc, amount, type, category };
+        transactions.push(newTx);
+      }
+      saveTransactions();
+      renderAll();
+      closeModalFn();
+    }
+
+    function exportCSV(){
+      const header = ['id','date','desc','amount','type','category'];
+      const rows = transactions.map(t => [
+        t.id,
+        t.date,
+        `"${(t.desc||'').replace(/"/g,'""')}"`,
+        t.amount,
+        t.type,
+        `"${(t.category||'').replace(/"/g,'""')}"`
+      ].join(','));
+      const csv = [header.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cashflow_transactions.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function onImportFile(e){
+      const f = e.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target.result;
+        try {
+          const parsed = csvToObjects(text);
+          const existingIds = new Set(transactions.map(t => t.id));
+          const toAdd = parsed.filter(p => !existingIds.has(p.id)).map(p => ({
+            id: p.id || id(),
+            date: p.date || today(),
+            desc: p.desc || '',
+            amount: Number(p.amount) || 0,
+            type: (p.type === 'expense') ? 'expense' : 'income',
+            category: p.category || ''
+          }));
+          transactions = transactions.concat(toAdd);
+          saveTransactions();
+          renderAll();
+          alert('Impor berhasil: ' + toAdd.length + ' transaksi ditambahkan.');
+        } catch(err){
+          console.error(err);
+          alert('Gagal mengimpor CSV. Pastikan format benar.');
+        }
+      };
+      reader.readAsText(f, 'UTF-8');
+      // reset
+      e.target.value = '';
+    }
+
+    function csvToObjects(csv){
+      // parser CSV sederhana yang mendukung field ber-quote
+      const lines = csv.split(/\r?\n/).filter((l,i)=> l.trim() !== '');
+      if (lines.length === 0) return [];
+      const header = parseCsvLine(lines[0]);
+      const rows = lines.slice(1);
+      return rows.map(line => {
+        const values = parseCsvLine(line);
+        const obj = {};
+        for (let i=0;i<header.length;i++) obj[header[i]] = values[i] || '';
+        return obj;
+      });
+    }
+    function parseCsvLine(line){
+      const vals = [];
+      let cur = '', inQuotes = false;
+      for (let i=0;i<line.length;i++){
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i+1] === '"') { cur += '"'; i++; continue; }
+          inQuotes = !inQuotes;
+          continue;
+        }
+        if (ch === ',' && !inQuotes) { vals.push(cur); cur=''; continue; }
+        cur += ch;
+      }
+      vals.push(cur);
+      return vals.map(v => v.trim());
+    }
+
+    // bersihkan sebelum unload (pastikan chart dihancurkan)
+    window.addEventListener('beforeunload', () => {
+      if (miniChart) try { miniChart.destroy(); } catch(e){}
+    });
+
+  })();
+  </script>
+</body>
+</html>
