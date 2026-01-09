@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Cashflow — Riwayat Transaksi</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style> body { font-family: 'Inter', sans-serif; background:#f8fafc } .modal-backdrop{background:rgba(2,6,23,0.45);} </style>
+</head>
+<body>
+  <div class="p-6 max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-semibold">Riwayat Transaksi</h1>
+      <a href="index.html" class="text-indigo-600">Kembali ke Dashboard</a>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+      <div class="flex gap-2 mb-3">
+        <input id="filterStart" type="date" class="p-2 border rounded-md" />
+        <input id="filterEnd" type="date" class="p-2 border rounded-md" />
+        <input id="filterCategory" placeholder="Filter kategori" class="p-2 border rounded-md" />
+        <button id="filterBtn" class="px-3 py-2 bg-indigo-600 text-white rounded-md">Filter</button>
+        <button id="clearFilterBtn" class="px-3 py-2 border rounded-md">Bersihkan</button>
+      </div>
+
+      <div class="overflow-auto">
+        <table id="txTable" class="w-full text-left">
+          <thead>
+            <tr class="text-sm text-slate-500 border-b">
+              <th class="p-2">Tanggal</th>
+              <th class="p-2">Deskripsi</th>
+              <th class="p-2">Kategori</th>
+              <th class="p-2">Jumlah</th>
+              <th class="p-2">Tipe</th>
+              <th class="p-2">Aksi</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="text-sm text-slate-500">Gunakan tombol Edit untuk mengubah transaksi, Hapus untuk menghapus.</div>
+  </div>
+
+  <!-- Modal edit (sama struktur seperti di index) -->
+  <div id="modal" class="fixed inset-0 hidden items-center justify-center modal-backdrop p-4">
+    <div class="bg-white rounded-lg w-full max-w-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modalTitle" class="text-lg font-semibold">Edit Transaksi</h3>
+        <button id="closeModal" class="text-slate-500 hover:text-slate-700">&times;</button>
+      </div>
+      <form id="txForm" class="grid grid-cols-1 gap-3">
+        <input type="hidden" id="txId" />
+        <div>
+          <label class="text-sm text-slate-600">Tanggal</label>
+          <input id="txDate" type="date" class="w-full mt-1 p-2 border rounded-md" required />
+        </div>
+        <div>
+          <label class="text-sm text-slate-600">Deskripsi</label>
+          <input id="txDesc" type="text" class="w-full mt-1 p-2 border rounded-md" required />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm text-slate-600">Jumlah</label>
+            <input id="txAmount" type="number" step="0.01" class="w-full mt-1 p-2 border rounded-md" required />
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Tipe</label>
+            <select id="txType" class="w-full mt-1 p-2 border rounded-md">
+              <option value="income">Pemasukan</option>
+              <option value="expense">Pengeluaran</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="text-sm text-slate-600">Kategori</label>
+          <input id="txCategory" type="text" class="w-full mt-1 p-2 border rounded-md" />
+        </div>
+        <div class="flex justify-end gap-2 mt-2">
+          <button type="button" id="cancelBtn" class="px-4 py-2 rounded-md border">Batal</button>
+          <button type="submit" class="px-4 py-2 rounded-md bg-indigo-600 text-white">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    const STORAGE_KEY = 'cf_transactions_v1';
+    const tableBody = document.querySelector('#txTable tbody');
+    const modal = document.getElementById('modal');
+    const closeModal = document.getElementById('closeModal');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const txForm = document.getElementById('txForm');
+    const txIdInput = document.getElementById('txId');
+
+    const filterStart = document.getElementById('filterStart');
+    const filterEnd = document.getElementById('filterEnd');
+    const filterCategory = document.getElementById('filterCategory');
+    const filterBtn = document.getElementById('filterBtn');
+    const clearFilterBtn = document.getElementById('clearFilterBtn');
+
+    let transactions = loadTransactions();
+    renderTable(transactions);
+
+    filterBtn.addEventListener('click', () => {
+      const s = filterStart.value ? new Date(filterStart.value) : null;
+      const e = filterEnd.value ? new Date(filterEnd.value) : null;
+      const cat = (filterCategory.value || '').toLowerCase();
+      const filtered = transactions.filter(t => {
+        const d = new Date(t.date);
+        if (s && d < s) return false;
+        if (e && d > e) return false;
+        if (cat && !(t.category || '').toLowerCase().includes(cat)) return false;
+        return true;
+      });
+      renderTable(filtered);
+    });
+    clearFilterBtn.addEventListener('click', () => { filterStart.value=''; filterEnd.value=''; filterCategory.value=''; renderTable(transactions); });
+
+    function loadTransactions(){ try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; } catch(e){ return []; } }
+    function saveTransactions(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions)); }
+
+    function renderTable(list){
+      tableBody.innerHTML = '';
+      if (!list || list.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="6" class="p-4 text-slate-500">Tidak ada data</td></tr>';
+        return;
+      }
+      const sorted = list.slice().sort((a,b)=> new Date(b.date) - new Date(a.date));
+      for (const tx of sorted){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="p-2 align-top">${tx.date}</td>
+          <td class="p-2 align-top">${escapeHtml(tx.desc)}</td>
+          <td class="p-2 align-top">${escapeHtml(tx.category || '')}</td>
+          <td class="p-2 align-top">${formatCurrency(tx.amount)}</td>
+          <td class="p-2 align-top">${tx.type === 'income' ? 'Pemasukan' : 'Pengeluaran'}</td>
+          <td class="p-2 align-top">
+            <button class="editBtn text-indigo-600 mr-2" data-id="${tx.id}">Edit</button>
+            <button class="delBtn text-rose-500" data-id="${tx.id}">Hapus</button>
+          </td>
+        `;
+        tableBody.appendChild(tr);
+      }
+      // event delegation
+      tableBody.querySelectorAll('.delBtn').forEach(btn => btn.addEventListener('click', (e)=>{
+        const id = e.currentTarget.dataset.id;
+        if (confirm('Hapus transaksi ini?')) {
+          transactions = transactions.filter(t => t.id !== id);
+          saveTransactions();
+          renderTable(transactions);
+        }
+      }));
+      tableBody.querySelectorAll('.editBtn').forEach(btn => btn.addEventListener('click', (e)=>{
+        const id = e.currentTarget.dataset.id;
+        const tx = transactions.find(t => t.id === id);
+        if (tx) openModal(tx);
+      }));
+    }
+
+    function openModal(tx){
+      modal.classList.remove('hidden'); modal.classList.add('flex');
+      if (tx) {
+        document.getElementById('modalTitle').textContent = 'Edit Transaksi';
+        txIdInput.value = tx.id;
+        document.getElementById('txDate').value = tx.date;
+        document.getElementById('txDesc').value = tx.desc;
+        document.getElementById('txAmount').value = tx.amount;
+        document.getElementById('txType').value = tx.type;
+        document.getElementById('txCategory').value = tx.category || '';
+      } else {
+        document.getElementById('modalTitle').textContent = 'Tambah Transaksi';
+        txIdInput.value = '';
+        document.getElementById('txDate').value = new Date().toISOString().slice(0,10);
+        document.getElementById('txForm').reset();
+      }
+    }
+    function closeModalFn(){ modal.classList.add('hidden'); modal.classList.remove('flex'); }
+    closeModal.addEventListener('click', closeModalFn);
+    cancelBtn.addEventListener('click', closeModalFn);
+
+    txForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const idVal = txIdInput.value;
+      const date = document.getElementById('txDate').value;
+      const desc = document.getElementById('txDesc').value.trim();
+      const amount = parseFloat(document.getElementById('txAmount').value) || 0;
+      const type = document.getElementById('txType').value;
+      const category = document.getElementById('txCategory').value.trim();
+      if (!desc || !date) { alert('Tanggal dan deskripsi wajib diisi'); return; }
+      if (idVal) {
+        transactions = transactions.map(t => t.id === idVal ? ({ ...t, date, desc, amount, type, category }) : t);
+      } else {
+        transactions.push({ id: 'tx_' + Math.random().toString(36).slice(2,9), date, desc, amount, type, category });
+      }
+      saveTransactions();
+      renderTable(transactions);
+      closeModalFn();
+    });
+
+    function formatCurrency(n){
+      return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0);
+    }
+    function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  })();
+  </script>
+</body>
+</html>
